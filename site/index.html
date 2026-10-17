@@ -780,7 +780,7 @@ var STRINGS = {
     field_tracking_number: 'Tracking number', field_estimated_delivery: 'Estimated delivery',
     carrier_placeholder: 'e.g. UPS, FedEx, DHL', shipping_method_placeholder: 'e.g. Express, Standard',
     tracking_placeholder: 'Tracking number', track_link: 'Track', no_tracking: '—',
-    po_col_tracking: 'Tracking', so_col_tracking: 'Tracking', so_col_number: 'Order #',
+    po_col_tracking: 'Tracking', so_col_tracking: 'Tracking', so_col_number: 'Order #', po_col_number: 'PO #', so_source_label: 'From',
     delete_order_btn: 'Delete order', create_order_btn: 'Create order',
     add_supplier_first: 'Add a supplier first.',
     err_select_supplier: 'Please select a supplier.',
@@ -1068,7 +1068,7 @@ var STRINGS = {
     field_tracking_number: 'Número de guía', field_estimated_delivery: 'Entrega estimada',
     carrier_placeholder: 'ej. UPS, FedEx, DHL', shipping_method_placeholder: 'ej. Express, Estándar',
     tracking_placeholder: 'Número de guía', track_link: 'Rastrear', no_tracking: '—',
-    po_col_tracking: 'Guía', so_col_tracking: 'Guía', so_col_number: 'Pedido #',
+    po_col_tracking: 'Guía', so_col_tracking: 'Guía', so_col_number: 'Pedido #', po_col_number: 'Orden #', so_source_label: 'Origen',
     delete_order_btn: 'Eliminar orden', create_order_btn: 'Crear orden',
     add_supplier_first: 'Agrega un proveedor primero.',
     err_select_supplier: 'Por favor selecciona un proveedor.',
@@ -1740,7 +1740,8 @@ function rowToSP(r){
     isPreferred: !!r.is_preferred, updatedAt:r.updated_at };
 }
 function poToRow(rec, uid, name){
-  return { id: rec.id, supplier_id: rec.supplierId, date: rec.date || todayISO(), status: rec.status || 'draft',
+  if(!rec.orderNumber) rec.orderNumber = genSoNumber(rec.date).replace(/^P506-/, 'PO506-');
+  return { id: rec.id, order_number: rec.orderNumber || null, supplier_id: rec.supplierId, date: rec.date || todayISO(), status: rec.status || 'draft',
     notes: rec.notes || null, shipping_cost: Number(rec.shippingCost)||0,
     wire_transfer_cost: Number(rec.wireTransferCost)||0, transportation_cost: Number(rec.transportationCost)||0,
     discount_type: rec.discountType === 'percent' ? 'percent' : 'amount', discount_value: Number(rec.discountValue)||0,
@@ -1750,7 +1751,7 @@ function poToRow(rec, uid, name){
     updated_by: uid, updated_by_name: name, updated_at: rec.updatedAt || todayISO() };
 }
 function rowToPO(r){
-  return { id:r.id, supplierId:r.supplier_id, date:r.date, status:r.status, notes:r.notes,
+  return { id:r.id, orderNumber:r.order_number||'', supplierId:r.supplier_id, date:r.date, status:r.status, notes:r.notes,
     shippingCost:Number(r.shipping_cost)||0,
     wireTransferCost:Number(r.wire_transfer_cost)||0, transportationCost:Number(r.transportation_cost)||0,
     discountType: r.discount_type === 'percent' ? 'percent' : 'amount', discountValue: Number(r.discount_value)||0,
@@ -1758,6 +1759,18 @@ function rowToPO(r){
     trackingNumber:r.tracking_number, estimatedDelivery:r.estimated_delivery,
     createdBy:r.created_by_name||'', createdAt:r.created_at, updatedBy:r.updated_by_name||'', updatedAt:r.updated_at,
     createdById:r.created_by, updatedById:r.updated_by };
+}
+/* Where a saved sales-order line's vials came from: the purchase order(s)
+   its FIFO / Source PO allocations point at. Empty for sellers (no PO access). */
+function soLineSourceText(soLineItemId){
+  var parts = [];
+  state.soLineItemAllocations.filter(function(a){ return a.soLineItemId === soLineItemId; }).forEach(function(a){
+    var poLi = byId(state.poLineItems, a.poLineItemId); if(!poLi) return;
+    var po = byId(state.purchaseOrders, poLi.poId); if(!po) return;
+    var s = byId(state.suppliers, po.supplierId);
+    parts.push((po.orderNumber || fmtDate(po.date)) + (s ? ' · ' + s.name : '') + ' (' + a.qty + ')');
+  });
+  return parts.join(', ');
 }
 function genSoNumber(dateStr){
   var M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -3082,6 +3095,7 @@ function openPOModal(existing, prefill){
       }
 
       el.innerHTML =
+        (existing && existing.orderNumber ? '<p style="margin:-6px 0 8px;font-weight:700">' + esc(t('po_col_number')) + ' ' + esc(existing.orderNumber) + '</p>' : '') +
         (existing ? recordAttributionHTML(existing) : '') +
         (state.suppliers.length ?
           '<div class="field-row">' +
@@ -3253,7 +3267,7 @@ function openSOModal(existing){
   var customerId = existing ? existing.customerId : '';
   var lines = existing
     ? state.soLineItems.filter(function(li){ return li.soId === existing.id; }).map(function(li){
-        return { variantId: li.variantId, qty: li.qty, unitPrice: li.unitPrice,
+        return { _lineId: li.id, _origVariantId: li.variantId, variantId: li.variantId, qty: li.qty, unitPrice: li.unitPrice,
           _priceCurrency: li.enteredCurrency === 'CRC' ? 'CRC' : 'USD',
           _crcRaw: li.enteredCurrency === 'CRC' && li.enteredAmountCrc != null ? String(li.enteredAmountCrc) : '' };
       })
@@ -3428,6 +3442,7 @@ function openSOModal(existing){
             return '<tr data-i="' + i + '">' +
               '<td>' + variantPickerHTML(l.variantId) +
               (stock !== null ? '<div class="li-hint' + (Number(l.qty) > stock ? ' warn' : '') + '">' + esc(t('in_stock_label')) + ' ' + stock + (Number(l.qty) > stock ? esc(t('not_enough_on_hand')) : '') + '</div>' : '') +
+              ((l._lineId && l.variantId === l._origVariantId && soLineSourceText(l._lineId)) ? '<div class="li-hint">' + esc(t('so_source_label')) + ': ' + esc(soLineSourceText(l._lineId)) + '</div>' : '') +
               '</td>' +
               '<td><input type="number" class="qty" min="0" step="1" value="' + esc(l.qty) + '"></td>' +
               '<td>' +
@@ -3721,7 +3736,7 @@ function openInternalUseModal(existing){
         matches.forEach(function(m){
           var supplier = byId(state.suppliers, m.po.supplierId);
           var remaining = remainingForPOLine(m.li.id);
-          var label = fmtDate(m.po.date) + ' · ' + (supplier ? supplier.name : '') + ' · ' + fmtMoney(m.costPerUnit) + '/vial · ' + tf('source_po_remaining_hint', { remaining: remaining });
+          var label = (m.po.orderNumber ? m.po.orderNumber + ' · ' : '') + fmtDate(m.po.date) + ' · ' + (supplier ? supplier.name : '') + ' · ' + fmtMoney(m.costPerUnit) + '/vial · ' + tf('source_po_remaining_hint', { remaining: remaining });
           html += '<option value="' + esc(m.po.id) + '"' + (l.sourcePoId === m.po.id ? ' selected' : '') + '>' + esc(label) + '</option>';
         });
         return html;
@@ -4370,6 +4385,7 @@ function renderPurchaseOrders(){
     var s = byId(state.suppliers, po.supplierId);
     var lineCount = state.poLineItems.filter(function(li){ return li.poId===po.id; }).length;
     return '<tr class="row-click" data-edit-po="' + po.id + '">' +
+      '<td style="white-space:nowrap;font-weight:600">' + esc(po.orderNumber || '') + '</td>' +
       '<td>' + esc(s ? s.name : '(deleted supplier)') + '</td>' +
       '<td>' + fmtDate(po.date) + '</td>' +
       '<td>' + statusChip(po.status) + '</td>' +
@@ -4380,7 +4396,7 @@ function renderPurchaseOrders(){
     '</tr>';
   }).join('');
 
-  html += '<div class="table-wrap"><table><thead><tr><th>' + esc(t('po_col_supplier')) + '</th><th>' + esc(t('po_col_date')) + '</th><th>' + esc(t('po_col_status')) + '</th><th>' + esc(t('po_col_tracking')) + '</th><th class="num">' + esc(t('po_col_lines')) + '</th><th class="num">' + esc(t('po_col_total')) + '</th><th>' + esc(t('po_col_by')) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  html += '<div class="table-wrap"><table><thead><tr><th>' + esc(t('po_col_number')) + '</th><th>' + esc(t('po_col_supplier')) + '</th><th>' + esc(t('po_col_date')) + '</th><th>' + esc(t('po_col_status')) + '</th><th>' + esc(t('po_col_tracking')) + '</th><th class="num">' + esc(t('po_col_lines')) + '</th><th class="num">' + esc(t('po_col_total')) + '</th><th>' + esc(t('po_col_by')) + '</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   return html;
 }
 
