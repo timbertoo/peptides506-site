@@ -732,6 +732,8 @@ var STRINGS = {
     prod_modal_edit_title: 'Edit product', prod_modal_new_title: 'New product',
     field_product_name: 'Product name', field_category: 'Category', field_description: 'Description',
     field_category_es: 'Category (Spanish)', field_description_es: 'Description (Spanish)',
+    field_public_name: 'Name on peptides506.com', public_name_placeholder: 'Leave empty to use the product name',
+    hint_public_name: 'Shown to customers on the online store instead of the product name. Takes effect on the store right away.',
     field_variants_label: 'Variants', add_variant_btn: '+ Add another variant',
     variant_placeholder_label: 'Variant (e.g. 10mg — 5 vials)', variant_placeholder_sku: 'SKU (optional)',
     variant_placeholder_price: 'Price', variant_placeholder_per_kit: 'Vials/kit',
@@ -1017,6 +1019,8 @@ var STRINGS = {
     prod_modal_edit_title: 'Editar producto', prod_modal_new_title: 'Nuevo producto',
     field_product_name: 'Nombre del producto', field_category: 'Categoría', field_description: 'Descripción',
     field_category_es: 'Categoría (español)', field_description_es: 'Descripción (español)',
+    field_public_name: 'Nombre en peptides506.com', public_name_placeholder: 'Déjalo vacío para usar el nombre del producto',
+    hint_public_name: 'Es el nombre que ven los clientes en la tienda en línea, en lugar del nombre del producto. Se actualiza en la tienda de inmediato.',
     field_variants_label: 'Variantes', add_variant_btn: '+ Agregar otra variante',
     variant_placeholder_label: 'Variante (ej. 10mg — 5 viales)', variant_placeholder_sku: 'SKU (opcional)',
     variant_placeholder_price: 'Precio', variant_placeholder_per_kit: 'Viales/kit',
@@ -1694,6 +1698,7 @@ function rowToCustomer(r){
 function productToRow(rec, uid, name){
   return { id: rec.id, name: rec.name || '', category: rec.category || null, description: rec.description || null,
     category_es: rec.categoryEs || null, description_es: rec.descriptionEs || null,
+    public_name: (rec.publicName || '').trim() || null,
     retail_price_usd: (rec.retailPriceUsd === '' || rec.retailPriceUsd === undefined || rec.retailPriceUsd === null) ? null : Number(rec.retailPriceUsd),
     is_public: !!rec.isPublic,
     created_by: rec.createdById || uid, created_by_name: rec.createdBy || name, created_at: rec.createdAt || todayISO(),
@@ -1701,7 +1706,7 @@ function productToRow(rec, uid, name){
 }
 function rowToProduct(r){
   return { id:r.id, name:r.name, category:r.category, description:r.description,
-    categoryEs:r.category_es, descriptionEs:r.description_es,
+    categoryEs:r.category_es, descriptionEs:r.description_es, publicName: r.public_name || '',
     retailPriceUsd: r.retail_price_usd, isPublic: !!r.is_public,
     createdBy:r.created_by_name||'', createdAt:r.created_at, updatedBy:r.updated_by_name||'', updatedAt:r.updated_at,
     createdById:r.created_by, updatedById:r.updated_by };
@@ -2249,6 +2254,7 @@ function openProductModal(existing, supplierContext, onDone){
           '<div></div>' +
         '</div>' +
         fieldHTML('prod-desc-es', t('field_description_es'), '<textarea id="prod-desc-es">' + esc(existing && existing.descriptionEs) + '</textarea>') +
+        (isAdmin ? fieldHTML('prod-public-name', t('field_public_name'), '<input type="text" id="prod-public-name" value="' + esc(existing && existing.publicName) + '" placeholder="' + esc(t('public_name_placeholder')) + '"><div class="hint">' + esc(t('hint_public_name')) + '</div>') : '') +
         '<div class="field"><label>' + esc(t('field_variants_label')) + '</label><div id="variant-rows" class="variant-rows"></div>' +
         '<button type="button" class="link-btn" data-act="add-variant">' + esc(t('add_variant_btn')) + '</button>' +
         '<div class="hint">' + esc(t('hint_vials_per_kit')) + '</div>' +
@@ -2308,6 +2314,8 @@ function openProductModal(existing, supplierContext, onDone){
         rec.description = el.querySelector('#prod-desc').value.trim();
         rec.categoryEs = el.querySelector('#prod-category-es').value.trim();
         rec.descriptionEs = el.querySelector('#prod-desc-es').value.trim();
+        var pubNameInput = el.querySelector('#prod-public-name');
+        if(isAdmin && pubNameInput) rec.publicName = pubNameInput.value.trim();
         stampRecord(rec, !existing);
         if(!existing) state.products.push(rec);
 
