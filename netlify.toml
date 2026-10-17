@@ -1,0 +1,4 @@
+# Netlify publishes only the site/ folder. claude/ holds build scripts and is not published.
+[build]
+  publish = "site"
+  command = ""
