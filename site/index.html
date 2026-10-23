@@ -2714,6 +2714,25 @@ function mostRecentReceivedSupplierName(variantId){
   return sup ? sup.name : '';
 }
 
+/* Every supplier that still has unsold vials of this variant, oldest
+   batch first (the same order FIFO allocation draws from), with how many
+   each has left — e.g. "MKM Peptides 49 · Peptide Laboratory 10". Falls
+   back to the most recent received supplier if no batch rows are loaded. */
+function supplierStockSummary(variantId){
+  var rows = sortBy(state.poLineRemaining.filter(function(r){ return r.variantId === variantId && Number(r.remaining) > 0; }), function(r){ return r.poDate || ''; });
+  var order = [], totals = {};
+  rows.forEach(function(r){
+    var li = byId(state.poLineItems, r.poLineItemId);
+    var po = li ? byId(state.purchaseOrders, li.poId) : null;
+    var sup = po ? byId(state.suppliers, po.supplierId) : null;
+    var name = sup ? sup.name : '?';
+    if(!totals.hasOwnProperty(name)){ totals[name] = 0; order.push(name); }
+    totals[name] += Number(r.remaining) || 0;
+  });
+  if(!order.length) return mostRecentReceivedSupplierName(variantId);
+  return order.map(function(n){ return n + ' ' + Math.round(totals[n] * 100) / 100; }).join(' · ');
+}
+
 function variantSearchList(supplierIdForPricing, onlyInStock){
   var products = {};
   state.products.forEach(function(p){ products[p.id] = p; });
@@ -2744,7 +2763,7 @@ function variantSearchList(supplierIdForPricing, onlyInStock){
        scoped to one supplier (PO context) — showing a different
        supplier's name there would look like a mistake, since every row is
        already that supplier's own. */
-    var sellerName = (supplierIdForPricing || isSellerOnly()) ? '' : mostRecentReceivedSupplierName(v.id);
+    var sellerName = (supplierIdForPricing || isSellerOnly()) ? '' : supplierStockSummary(v.id);
     list.push({ variantId: v.id, productId: p.id, productName: p.name, variantLabel: v.label, priceNote: priceNote,
       sellerName: sellerName, stock: stock });
   });
@@ -2778,7 +2797,7 @@ function variantDropdownItemsHTML(list, query){
   if(!list.length) return '<div class="vp-empty">' + esc(t(list.emptyMessageKey || 'vp_no_matches')) + '</div>';
   var q = (query || '').trim().toLowerCase();
   var filtered = !q ? list : list.filter(function(x){
-    return (x.productName + ' ' + x.variantLabel).toLowerCase().indexOf(q) !== -1;
+    return (x.productName + ' ' + x.variantLabel + ' ' + (x.sellerName || '')).toLowerCase().indexOf(q) !== -1;
   });
   if(!filtered.length) return '<div class="vp-empty">' + esc(t('vp_no_matches')) + '</div>';
   var html = '', lastProduct = null;
