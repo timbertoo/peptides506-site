@@ -783,7 +783,7 @@ var STRINGS = {
     field_tracking_number: 'Tracking number', field_estimated_delivery: 'Estimated delivery',
     carrier_placeholder: 'e.g. UPS, FedEx, DHL', shipping_method_placeholder: 'e.g. Express, Standard',
     tracking_placeholder: 'Tracking number', track_link: 'Track', no_tracking: '—',
-    po_col_tracking: 'Tracking', so_col_tracking: 'Tracking', so_col_number: 'Order #', po_col_number: 'PO #', so_source_label: 'From',
+    po_col_tracking: 'Tracking', so_col_tracking: 'Tracking', so_col_number: 'Order #', po_col_number: 'PO #', so_source_label: 'From', so_take_from_label: 'Take from:', so_take_from_auto: 'Automatic (oldest stock first)', so_take_from_left: '{n} left', so_take_from_short: 'Only {n} left from this supplier',
     delete_order_btn: 'Delete order', create_order_btn: 'Create order',
     add_supplier_first: 'Add a supplier first.',
     err_select_supplier: 'Please select a supplier.',
@@ -1071,7 +1071,7 @@ var STRINGS = {
     field_tracking_number: 'Número de guía', field_estimated_delivery: 'Entrega estimada',
     carrier_placeholder: 'ej. UPS, FedEx, DHL', shipping_method_placeholder: 'ej. Express, Estándar',
     tracking_placeholder: 'Número de guía', track_link: 'Rastrear', no_tracking: '—',
-    po_col_tracking: 'Guía', so_col_tracking: 'Guía', so_col_number: 'Pedido #', po_col_number: 'Orden #', so_source_label: 'Origen',
+    po_col_tracking: 'Guía', so_col_tracking: 'Guía', so_col_number: 'Pedido #', po_col_number: 'Orden #', so_source_label: 'Origen', so_take_from_label: 'Tomar de:', so_take_from_auto: 'Automático (primero lo más antiguo)', so_take_from_left: 'quedan {n}', so_take_from_short: 'Solo quedan {n} de este proveedor',
     delete_order_btn: 'Eliminar orden', create_order_btn: 'Crear orden',
     add_supplier_first: 'Agrega un proveedor primero.',
     err_select_supplier: 'Por favor selecciona un proveedor.',
@@ -1502,8 +1502,18 @@ function remainingForPOLine(poLineItemId){
    Returns the picks made; if PO stock genuinely falls short, whatever's
    left over is simply not allocated (soft — mirrors the existing
    not-enough-on-hand warning elsewhere, never blocks a save). */
-function allocateFIFOForVariant(variantId, qtyNeeded, workingRemaining){
-  var candidates = sortBy(state.poLineRemaining.filter(function(r){ return r.variantId === variantId; }), function(r){ return r.poDate; });
+function supplierIdForPOLine(poLineItemId){
+  var li = byId(state.poLineItems, poLineItemId);
+  var po = li ? byId(state.purchaseOrders, li.poId) : null;
+  return po ? po.supplierId : null;
+}
+/* supplierId (optional): only draw from that supplier's batches — used when
+   Pedro picks "Take stock from" on a sales-order line. Empty = any supplier,
+   oldest batch first. */
+function allocateFIFOForVariant(variantId, qtyNeeded, workingRemaining, supplierId){
+  var candidates = sortBy(state.poLineRemaining.filter(function(r){
+    return r.variantId === variantId && (!supplierId || supplierIdForPOLine(r.poLineItemId) === supplierId);
+  }), function(r){ return r.poDate; });
   var picks = [];
   var remaining = Number(qtyNeeded) || 0;
   candidates.forEach(function(c){
@@ -1812,14 +1822,16 @@ function soLineToRow(li){
     entered_currency: li.enteredCurrency === 'CRC' ? 'CRC' : 'USD',
     entered_amount_crc: (li.enteredCurrency === 'CRC' && li.enteredAmountCrc != null && li.enteredAmountCrc !== '') ? Number(li.enteredAmountCrc) : null,
     source_po_id: li.sourcePoId || null,
-    source_cost_usd: li.sourceCostUsd != null ? Number(li.sourceCostUsd) : null };
+    source_cost_usd: li.sourceCostUsd != null ? Number(li.sourceCostUsd) : null,
+    source_supplier_id: li.sourceSupplierId || null };
 }
 function rowToSOLine(r){
   return { id:r.id, soId:r.so_id, variantId:r.variant_id, qty:Number(r.qty)||0, unitPrice:Number(r.unit_price)||0,
     enteredCurrency: r.entered_currency === 'CRC' ? 'CRC' : 'USD',
     enteredAmountCrc: r.entered_amount_crc != null ? Number(r.entered_amount_crc) : null,
     sourcePoId: r.source_po_id || null,
-    sourceCostUsd: r.source_cost_usd != null ? Number(r.source_cost_usd) : null };
+    sourceCostUsd: r.source_cost_usd != null ? Number(r.source_cost_usd) : null,
+    sourceSupplierId: r.source_supplier_id || null };
 }
 /* Which specific purchase-order line a sold vial actually came from — the
    FIFO record behind po_line_remaining_units(). One so_line_item can span
@@ -2718,19 +2730,32 @@ function mostRecentReceivedSupplierName(variantId){
    batch first (the same order FIFO allocation draws from), with how many
    each has left — e.g. "MKM Peptides 49 · Peptide Laboratory 10". Falls
    back to the most recent received supplier if no batch rows are loaded. */
-function supplierStockSummary(variantId){
-  var rows = sortBy(state.poLineRemaining.filter(function(r){ return r.variantId === variantId && Number(r.remaining) > 0; }), function(r){ return r.poDate || ''; });
-  var order = [], totals = {};
+/* [{supplierId, name, remaining}] for every supplier with unsold vials of
+   this variant, oldest batch first. `extra` (optional) adds units back per
+   po_line_item_id — used when editing a completed sale, whose own vials are
+   already counted as sold. */
+function supplierStockList(variantId, extra){
+  extra = extra || {};
+  var rows = sortBy(state.poLineRemaining.filter(function(r){ return r.variantId === variantId; }), function(r){ return r.poDate || ''; });
+  var order = [], byS = {};
   rows.forEach(function(r){
-    var li = byId(state.poLineItems, r.poLineItemId);
-    var po = li ? byId(state.purchaseOrders, li.poId) : null;
-    var sup = po ? byId(state.suppliers, po.supplierId) : null;
-    var name = sup ? sup.name : '?';
-    if(!totals.hasOwnProperty(name)){ totals[name] = 0; order.push(name); }
-    totals[name] += Number(r.remaining) || 0;
+    var rem = (Number(r.remaining) || 0) + (Number(extra[r.poLineItemId]) || 0);
+    if(rem <= 0) return;
+    var sid = supplierIdForPOLine(r.poLineItemId) || '';
+    if(!byS[sid]){
+      var sup = byId(state.suppliers, sid);
+      byS[sid] = { supplierId: sid, name: sup ? sup.name : '?', remaining: 0 };
+      order.push(byS[sid]);
+    }
+    byS[sid].remaining += rem;
   });
-  if(!order.length) return mostRecentReceivedSupplierName(variantId);
-  return order.map(function(n){ return n + ' ' + Math.round(totals[n] * 100) / 100; }).join(' · ');
+  order.forEach(function(o){ o.remaining = Math.round(o.remaining * 100) / 100; });
+  return order;
+}
+function supplierStockSummary(variantId){
+  var list = supplierStockList(variantId);
+  if(!list.length) return mostRecentReceivedSupplierName(variantId);
+  return list.map(function(o){ return o.name + ' ' + o.remaining; }).join(' · ');
 }
 
 function variantSearchList(supplierIdForPricing, onlyInStock){
@@ -3290,6 +3315,7 @@ function openSOModal(existing){
   var lines = existing
     ? state.soLineItems.filter(function(li){ return li.soId === existing.id; }).map(function(li){
         return { _lineId: li.id, _origVariantId: li.variantId, variantId: li.variantId, qty: li.qty, unitPrice: li.unitPrice,
+          sourceSupplierId: li.sourceSupplierId || '',
           _priceCurrency: li.enteredCurrency === 'CRC' ? 'CRC' : 'USD',
           _crcRaw: li.enteredCurrency === 'CRC' && li.enteredAmountCrc != null ? String(li.enteredAmountCrc) : '' };
       })
@@ -3298,6 +3324,15 @@ function openSOModal(existing){
   var date = existing ? existing.date : todayISO();
   var notes = existing ? existing.notes : '';
   var shippingCost = existing ? (Number(existing.shippingCost)||0) : 0;
+  /* Vials this order itself already holds (only a completed sale has any) —
+     added back so its own stock still shows as available to it when editing. */
+  var ownAlloc = {};
+  if(existing){
+    var ownLineIds = state.soLineItems.filter(function(li){ return li.soId === existing.id; }).map(function(li){ return li.id; });
+    state.soLineItemAllocations.forEach(function(a){
+      if(ownLineIds.indexOf(a.soLineItemId) !== -1) ownAlloc[a.poLineItemId] = (ownAlloc[a.poLineItemId] || 0) + (Number(a.qty) || 0);
+    });
+  }
   var discountPct = existing ? (Number(existing.discountPct)||0) : 0;
   var carrier = existing ? (existing.carrier || '') : '';
   var shippingMethod = existing ? (existing.shippingMethod || '') : '';
@@ -3468,6 +3503,23 @@ function openSOModal(existing){
               '<td>' + variantPickerHTML(l.variantId) +
               (stock !== null ? '<div class="li-hint' + (Number(l.qty) > stock ? ' warn' : '') + '">' + esc(t('in_stock_label')) + ' ' + stock + (Number(l.qty) > stock ? esc(t('not_enough_on_hand')) : '') + '</div>' : '') +
               ((l._lineId && l.variantId === l._origVariantId && soLineSourceText(l._lineId)) ? '<div class="li-hint">' + esc(t('so_source_label')) + ': ' + esc(soLineSourceText(l._lineId)) + '</div>' : '') +
+              ((l.variantId && !isSellerOnly()) ? (function(){
+                var sList = supplierStockList(l.variantId, ownAlloc);
+                var opts = '<option value="">' + esc(t('so_take_from_auto')) + '</option>';
+                var chosen = null;
+                sList.forEach(function(o){
+                  if(o.supplierId === l.sourceSupplierId) chosen = o;
+                  opts += '<option value="' + esc(o.supplierId) + '"' + (o.supplierId === l.sourceSupplierId ? ' selected' : '') + '>' + esc(o.name + ' — ' + tf('so_take_from_left', { n: o.remaining })) + '</option>';
+                });
+                if(l.sourceSupplierId && !chosen){
+                  var gone = byId(state.suppliers, l.sourceSupplierId);
+                  opts += '<option value="' + esc(l.sourceSupplierId) + '" selected>' + esc((gone ? gone.name : '?') + ' — ' + tf('so_take_from_left', { n: 0 })) + '</option>';
+                }
+                var have = chosen ? chosen.remaining : (l.sourceSupplierId ? 0 : null);
+                return '<div class="li-hint" style="display:flex;gap:6px;align-items:center;margin-top:4px">' + esc(t('so_take_from_label')) +
+                  ' <select class="source-supplier" style="flex:1;min-width:0;padding:4px 6px;font-size:12px">' + opts + '</select></div>' +
+                  ((have !== null && Number(l.qty) > have) ? '<div class="li-hint warn">' + esc(tf('so_take_from_short', { n: have })) + '</div>' : '');
+              })() : '') +
               '</td>' +
               '<td><input type="number" class="qty" min="0" step="1" value="' + esc(l.qty) + '"></td>' +
               '<td>' +
@@ -3495,10 +3547,13 @@ function openSOModal(existing){
             supplierIdForPricing: null,
             onlyInStock: true,
             onSelect: function(variantId){
+              if(lines[i].variantId !== variantId) lines[i].sourceSupplierId = '';
               lines[i].variantId = variantId;
               renderLines();
             }
           });
+          var srcSel = row.querySelector('.source-supplier');
+          if(srcSel) srcSel.addEventListener('change', function(){ lines[i].sourceSupplierId = srcSel.value; renderLines(); });
           row.querySelector('.qty').addEventListener('input', function(e){ lines[i].qty = e.target.value; renderLines(); });
           var currSel = row.querySelector('.price-currency');
           currSel.addEventListener('change', function(){
@@ -3695,15 +3750,18 @@ function openSOModal(existing){
           return { id: uid('soli'), soId: rec.id, variantId: l.variantId, qty: Number(l.qty), unitPrice: Number(l.unitPrice)||0,
             enteredCurrency: l._priceCurrency === 'CRC' ? 'CRC' : 'USD',
             enteredAmountCrc: (l._priceCurrency === 'CRC' && l._crcRaw !== '' && l._crcRaw != null) ? Number(l._crcRaw) : null,
-            sourcePoId: null, sourceCostUsd: null };
+            sourcePoId: null, sourceCostUsd: null, sourceSupplierId: l.sourceSupplierId || null };
         });
         state.soLineItems = state.soLineItems.filter(function(li){ return li.soId !== rec.id; }).concat(newLineItems);
         state.soLineItemAllocations = state.soLineItemAllocations.filter(function(a){ return oldLineIds.indexOf(a.soLineItemId) === -1; });
         if(deductsStock){
+          /* Start from server remaining plus this order's own previous vials,
+             so re-saving a completed sale can reuse the same batches. */
           var workingRemaining = {};
+          state.poLineRemaining.forEach(function(r){ workingRemaining[r.poLineItemId] = (Number(r.remaining) || 0) + (Number(ownAlloc[r.poLineItemId]) || 0); });
           newLineItems.forEach(function(li, idx){
             var l = validLines[idx];
-            allocateFIFOForVariant(l.variantId, Number(l.qty), workingRemaining).forEach(function(pick){
+            allocateFIFOForVariant(l.variantId, Number(l.qty), workingRemaining, l.sourceSupplierId || null).forEach(function(pick){
               state.soLineItemAllocations.push({ id: uid('soalloc'), soLineItemId: li.id, poLineItemId: pick.poLineItemId, qty: pick.qty });
             });
           });
