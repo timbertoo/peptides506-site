@@ -385,6 +385,9 @@
   .li-hint.warn { color: var(--warn); }
 
   .variant-picker { position: relative; }
+  .cust-pick-row { display: flex; gap: 8px; align-items: stretch; }
+  .cust-pick-row .variant-picker { flex: 1; min-width: 0; }
+  .cust-add-btn { white-space: nowrap; flex: 0 0 auto; }
   .variant-picker-dropdown {
     position: absolute; top: calc(100% + 2px); left: 0; right: 0;
     max-height: 260px; overflow-y: auto; z-index: 30;
@@ -3353,9 +3356,12 @@ function openSOModal(existing){
         return c ? c.name : '';
       }
       function customerPickerHTML(id){
-        return '<div class="variant-picker">' +
-          '<input type="text" id="so-customer" class="so-customer-search" autocomplete="off" placeholder="' + esc(t('select_customer_placeholder')) + '" value="' + esc(customerDisplayLabel(id)) + '">' +
-          '<input type="hidden" class="so-customer-value" value="' + esc(id || '') + '">' +
+        return '<div class="cust-pick-row">' +
+          '<div class="variant-picker">' +
+            '<input type="text" id="so-customer" class="so-customer-search" autocomplete="off" placeholder="' + esc(t('select_customer_placeholder')) + '" value="' + esc(customerDisplayLabel(id)) + '">' +
+            '<input type="hidden" class="so-customer-value" value="' + esc(id || '') + '">' +
+          '</div>' +
+          '<button type="button" class="btn btn-primary cust-add-btn" data-act="new-customer" title="' + esc(t('new_customer_link')) + '">' + esc(t('new_customer_link')) + '</button>' +
         '</div>';
       }
       function attachCustomerPicker(wrap){
@@ -3555,7 +3561,6 @@ function openSOModal(existing){
           '</div>' +
           '<div class="field-row">' +
             fieldHTML('so-status', t('field_status'), '<select id="so-status">' + statusOptions() + '</select>') +
-            '<div class="field"><label>&nbsp;</label><button type="button" class="link-btn" data-act="new-customer">' + esc(t('new_customer_link')) + '</button></div>' +
           '</div>'
         : '<p class="muted">' + esc(t('add_customer_first')) + '</p><button type="button" class="btn btn-primary" data-act="new-customer">' + esc(t('new_customer_link')) + '</button>') +
         '<div id="line-wrap"></div>' +
