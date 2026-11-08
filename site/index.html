@@ -780,6 +780,7 @@ var STRINGS = {
     po_discount_hint: 'Discount applied: −{amount}',
     shipping_details_label: 'Shipping details',
     field_carrier: 'Carrier', field_shipping_method: 'Shipping method',
+    po_dates_label: 'Order timeline', field_date_paid: 'Date paid', field_date_shipped: 'Date shipped', field_date_arrived_usa: 'Arrived in USA', field_date_shipped_cr: 'Shipped to Costa Rica', field_date_arrived_cr: 'Arrived in Costa Rica',
     field_tracking_number: 'Tracking number', field_estimated_delivery: 'Estimated delivery',
     carrier_placeholder: 'e.g. UPS, FedEx, DHL', shipping_method_placeholder: 'e.g. Express, Standard',
     tracking_placeholder: 'Tracking number', track_link: 'Track', no_tracking: '—',
@@ -1068,6 +1069,7 @@ var STRINGS = {
     po_discount_hint: 'Descuento aplicado: −{amount}',
     shipping_details_label: 'Detalles de envío',
     field_carrier: 'Transportista', field_shipping_method: 'Método de envío',
+    po_dates_label: 'Fechas del pedido', field_date_paid: 'Fecha de pago', field_date_shipped: 'Fecha de envío', field_date_arrived_usa: 'Llegada a EE. UU.', field_date_shipped_cr: 'Envío a Costa Rica', field_date_arrived_cr: 'Llegada a Costa Rica',
     field_tracking_number: 'Número de guía', field_estimated_delivery: 'Entrega estimada',
     carrier_placeholder: 'ej. UPS, FedEx, DHL', shipping_method_placeholder: 'ej. Express, Estándar',
     tracking_placeholder: 'Número de guía', track_link: 'Rastrear', no_tracking: '—',
@@ -1760,6 +1762,7 @@ function poToRow(rec, uid, name){
     discount_type: rec.discountType === 'percent' ? 'percent' : 'amount', discount_value: Number(rec.discountValue)||0,
     carrier: rec.carrier || null, shipping_method: rec.shippingMethod || null,
     tracking_number: rec.trackingNumber || null, estimated_delivery: rec.estimatedDelivery || null,
+    date_paid: rec.datePaid || null, date_shipped: rec.dateShipped || null, date_arrived_usa: rec.dateArrivedUsa || null, date_shipped_cr: rec.dateShippedCr || null, date_arrived_cr: rec.dateArrivedCr || null,
     created_by: rec.createdById || uid, created_by_name: rec.createdBy || name, created_at: rec.createdAt || todayISO(),
     updated_by: uid, updated_by_name: name, updated_at: rec.updatedAt || todayISO() };
 }
@@ -1770,6 +1773,7 @@ function rowToPO(r){
     discountType: r.discount_type === 'percent' ? 'percent' : 'amount', discountValue: Number(r.discount_value)||0,
     carrier:r.carrier, shippingMethod:r.shipping_method,
     trackingNumber:r.tracking_number, estimatedDelivery:r.estimated_delivery,
+    datePaid:r.date_paid||'', dateShipped:r.date_shipped||'', dateArrivedUsa:r.date_arrived_usa||'', dateShippedCr:r.date_shipped_cr||'', dateArrivedCr:r.date_arrived_cr||'',
     createdBy:r.created_by_name||'', createdAt:r.created_at, updatedBy:r.updated_by_name||'', updatedAt:r.updated_at,
     createdById:r.created_by, updatedById:r.updated_by };
 }
@@ -2940,6 +2944,11 @@ function openPOModal(existing, prefill){
   var shippingMethod = existing ? (existing.shippingMethod || '') : '';
   var trackingNumber = existing ? (existing.trackingNumber || '') : '';
   var estimatedDelivery = existing ? (existing.estimatedDelivery || '') : '';
+  var datePaid = existing ? (existing.datePaid || '') : '';
+  var dateShipped = existing ? (existing.dateShipped || '') : '';
+  var dateArrivedUsa = existing ? (existing.dateArrivedUsa || '') : '';
+  var dateShippedCr = existing ? (existing.dateShippedCr || '') : '';
+  var dateArrivedCr = existing ? (existing.dateArrivedCr || '') : '';
 
   pushModal({
     title: existing ? t('po_modal_edit_title') : t('po_modal_new_title'),
@@ -3179,6 +3188,16 @@ function openPOModal(existing, prefill){
           fieldHTML('po-tracking', t('field_tracking_number'), '<input type="text" id="po-tracking" placeholder="' + esc(t('tracking_placeholder')) + '" value="' + esc(trackingNumber) + '">') +
           fieldHTML('po-eta', t('field_estimated_delivery'), '<input type="date" id="po-eta" value="' + esc(estimatedDelivery) + '">') +
         '</div>' +
+        '<div class="field"><label>' + esc(t('po_dates_label')) + '</label></div>' +
+        '<div class="field-row">' +
+          fieldHTML('po-dpaid', t('field_date_paid'), '<input type="date" id="po-dpaid" value="' + esc(datePaid) + '">') +
+          fieldHTML('po-dship', t('field_date_shipped'), '<input type="date" id="po-dship" value="' + esc(dateShipped) + '">') +
+        '</div>' +
+        '<div class="field-row">' +
+          fieldHTML('po-dusa', t('field_date_arrived_usa'), '<input type="date" id="po-dusa" value="' + esc(dateArrivedUsa) + '">') +
+          fieldHTML('po-dshipcr', t('field_date_shipped_cr'), '<input type="date" id="po-dshipcr" value="' + esc(dateShippedCr) + '">') +
+        '</div>' +
+        fieldHTML('po-dcr', t('field_date_arrived_cr'), '<input type="date" id="po-dcr" value="' + esc(dateArrivedCr) + '">') +
         fieldHTML('po-notes', t('field_notes'), '<textarea id="po-notes">' + esc(notes) + '</textarea>') +
         '<div class="modal-foot">' +
           ((existing && isAdmin) ? '<button class="btn btn-danger" data-act="del">' + esc(t('delete_order_btn')) + '</button>' : '') +
@@ -3268,6 +3287,11 @@ function openPOModal(existing, prefill){
         rec.shippingMethod = el.querySelector('#po-shipmethod').value.trim();
         rec.trackingNumber = el.querySelector('#po-tracking').value.trim();
         rec.estimatedDelivery = el.querySelector('#po-eta').value || '';
+        rec.datePaid = el.querySelector('#po-dpaid').value || '';
+        rec.dateShipped = el.querySelector('#po-dship').value || '';
+        rec.dateArrivedUsa = el.querySelector('#po-dusa').value || '';
+        rec.dateShippedCr = el.querySelector('#po-dshipcr').value || '';
+        rec.dateArrivedCr = el.querySelector('#po-dcr').value || '';
         stampRecord(rec, !existing);
         if(!existing) state.purchaseOrders.push(rec);
 
