@@ -265,7 +265,7 @@ def page(it):
     {''.join(f'<li><a href="/productos/{esc(o["slug"])}/">{esc(o["name"])}<span>{esc(o["variant"])}</span></a></li>' for o in others)}
   </ul>
 </main>
-<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a>{f' · <a href="mailto:{esc(settings.get("orderEmail"))}">{esc(settings.get("orderEmail"))}</a>' if settings.get('orderEmail') else ''}</div></footer>
+<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a> · <a href="/sobre-nosotros/">Sobre nosotros</a> · <a href="/envios/">Envíos y pagos</a> · <a href="/contacto/">Contacto</a>{f' · <a href="mailto:{esc(settings.get("orderEmail"))}">{esc(settings.get("orderEmail"))}</a>' if settings.get('orderEmail') else ''}</div></footer>
 </body>
 </html>
 """
@@ -306,7 +306,7 @@ def index_page():
   <ul class="others">{lis}</ul>
   <div class="disclaimer">Productos exclusivamente para fines de investigación. No destinados al consumo humano ni animal.</div>
 </main>
-<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a></div></footer>
+<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a> · <a href="/sobre-nosotros/">Sobre nosotros</a> · <a href="/envios/">Envíos y pagos</a> · <a href="/contacto/">Contacto</a></div></footer>
 </body>
 </html>
 """
@@ -370,7 +370,7 @@ def shell(title, desc, url, img, crumbs, main, ld_list):
 {main}
   <div class="disclaimer">Productos exclusivamente para fines de investigación en laboratorio. No destinados al consumo humano ni animal. Venta solo a mayores de 18 años.</div>
 </main>
-<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a> · <a href="/productos/">Todos los productos</a>{f' · <a href="mailto:{esc(settings.get("orderEmail"))}">{esc(settings.get("orderEmail"))}</a>' if settings.get('orderEmail') else ''}</div></footer>
+<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a> · <a href="/productos/">Todos los productos</a> · <a href="/sobre-nosotros/">Sobre nosotros</a> · <a href="/envios/">Envíos y pagos</a> · <a href="/contacto/">Contacto</a>{f' · <a href="mailto:{esc(settings.get("orderEmail"))}">{esc(settings.get("orderEmail"))}</a>' if settings.get('orderEmail') else ''}</div></footer>
 </body>
 </html>
 '''
@@ -463,6 +463,95 @@ for name, c in COMPOUNDS.items():
         shell(f'{name} en Costa Rica | {strengths} | Peptides 506', desc, url, img, crumbs, main, ld))
     hub_urls.append((url, '0.8'))
 
+# ---------- info pages: about, shipping & payment, contact ----------
+wa_pretty = f'+{wa[:3]} {wa[3:7]} {wa[7:]}' if len(wa) == 11 else f'+{wa}'
+email = settings.get('orderEmail') or ''
+org_ld = {'@context': 'https://schema.org', '@type': 'Organization', 'name': 'Peptides 506', 'url': SITE + '/',
+          'logo': SITE + '/product-images/logo.png', 'areaServed': 'CR',
+          'contactPoint': {'@type': 'ContactPoint', 'contactType': 'customer service', 'telephone': wa_pretty.replace(' ', '-'),
+                           **({'email': email} if email else {}), 'availableLanguage': ['Spanish', 'English'], 'areaServed': 'CR'}}
+wa_btn = f'<a class="btn btn-buy" href="https://wa.me/{wa}" target="_blank" rel="noopener">Escríbenos por WhatsApp</a>' if wa else ''
+mail_btn = f'<a class="btn btn-wa" href="mailto:{esc(email)}">{esc(email)}</a>' if email else ''
+INFO = [
+  ('sobre-nosotros', 'Sobre nosotros | Peptides 506 Costa Rica', 'Sobre nosotros',
+   'Peptides 506 es un negocio costarricense que ofrece péptidos de investigación por vial individual, con COA disponible y atención directa por WhatsApp.',
+   f'''  <h1>Sobre Peptides 506</h1>
+  <p class="lead">Un negocio costarricense dedicado a ofrecer péptidos de investigación de forma clara, sencilla y con atención directa.</p>
+  <div class="prose">
+  <p>Peptides 506 nació para que investigadores en Costa Rica puedan acceder a péptidos de investigación sin tener que importarlos por su cuenta ni comprar kits completos. El 506 de nuestro nombre es el código telefónico del país: atendemos exclusivamente dentro de Costa Rica.</p>
+  </div>
+  <h2>Cómo trabajamos</h2>
+  <ul class="studied">
+    <li><strong>Venta por vial individual:</strong> compras solo lo que necesitas, sin kits de diez viales.</li>
+    <li><strong>Agua bacteriostática incluida:</strong> un vial gratis por cada vial de péptido.</li>
+    <li><strong>Certificado de Análisis (COA):</strong> disponible bajo solicitud para cada lote.</li>
+    <li><strong>Información clara:</strong> cada producto tiene su propia página con ficha técnica y una descripción honesta de lo que la investigación muestra y lo que no.</li>
+    <li><strong>Atención directa:</strong> respondemos personalmente por WhatsApp, en español o en inglés.</li>
+  </ul>
+  <h2>Solo para investigación</h2>
+  <div class="prose"><p>Todos nuestros productos se ofrecen exclusivamente para fines de investigación en laboratorio. No son medicamentos, no están destinados al consumo humano ni animal, y no ofrecemos recomendaciones de uso ni de dosificación. La venta es solo para mayores de 18 años.</p></div>
+  <h2>In English</h2>
+  <p class="en" lang="en">Peptides 506 is a Costa Rican business offering research peptides by the single vial, with a free bacteriostatic water vial per peptide, COA on request and direct WhatsApp service in Spanish or English. We serve Costa Rica only. For research use only.</p>
+  <div class="btns">{wa_btn}{mail_btn}</div>''', [org_ld]),
+  ('envios', 'Envíos y formas de pago | Peptides 506 Costa Rica', 'Envíos y pagos',
+   'Enviamos a todo Costa Rica por servicio de mensajería. Pagos por SINPE Móvil, transferencia bancaria o efectivo contra entrega. Costo de envío según la zona.',
+   f'''  <h1>Envíos y formas de pago</h1>
+  <p class="lead">Enviamos a todo Costa Rica por servicio de mensajería.</p>
+  <h2>Cobertura</h2>
+  <div class="prose"><p>Hacemos entregas en las siete provincias del país: San José, Alajuela, Cartago, Heredia, Guanacaste, Puntarenas y Limón. No realizamos envíos fuera de Costa Rica.</p></div>
+  <h2>Costo de envío</h2>
+  <div class="prose"><p>El costo depende de la zona de entrega. Te lo confirmamos por WhatsApp junto con el total de tu pedido, antes de que pagues.</p></div>
+  <h2>Tiempo de entrega</h2>
+  <div class="prose"><p>El tiempo de entrega varía según la zona y la disponibilidad del servicio de mensajería. Te confirmamos la fecha estimada al momento de coordinar tu pedido.</p></div>
+  <h2>Formas de pago</h2>
+  <ul class="studied">
+    <li><strong>SINPE Móvil</strong></li>
+    <li><strong>Transferencia bancaria</strong></li>
+    <li><strong>Efectivo contra entrega</strong></li>
+  </ul>
+  <h2>Cómo hacer un pedido</h2>
+  <ul class="studied">
+    <li>Elige tus productos en la <a href="/">tienda</a> y agrégalos al carrito, o escríbenos directamente.</li>
+    <li>Completa tus datos de contacto y la dirección de entrega.</li>
+    <li>Confirma el pedido por WhatsApp. Te indicamos el costo de envío, el total y la fecha estimada.</li>
+    <li>Realiza el pago por el medio que prefieras y coordinamos la entrega.</li>
+  </ul>
+  <h2>¿Algún problema con tu pedido?</h2>
+  <div class="prose"><p>Si tu pedido llega incompleto o con algún problema, escríbenos por WhatsApp con tu nombre y una foto del paquete, y lo resolvemos contigo.</p></div>
+  <h2>In English</h2>
+  <p class="en" lang="en">We ship anywhere in Costa Rica by courier (Costa Rica only). Shipping cost depends on the area and is confirmed on WhatsApp before you pay, along with the estimated delivery date. Payment by SINPE Móvil, bank transfer or cash on delivery.</p>
+  <div class="btns">{wa_btn}</div>''', [org_ld]),
+  ('contacto', 'Contacto | Peptides 506 Costa Rica', 'Contacto',
+   f'Contacta a Peptides 506 por WhatsApp {wa_pretty} o por correo{" " + email if email else ""}. Atención en español e inglés, pedidos en todo Costa Rica.',
+   f'''  <h1>Contacto</h1>
+  <p class="lead">La forma más rápida de comunicarte con nosotros es por WhatsApp.</p>
+  <table><tbody>
+    {f'<tr><td>WhatsApp</td><td><a href="https://wa.me/{wa}" target="_blank" rel="noopener">{esc(wa_pretty)}</a></td></tr>' if wa else ''}
+    {f'<tr><td>Correo</td><td><a href="mailto:{esc(email)}">{esc(email)}</a></td></tr>' if email else ''}
+    <tr><td>Sitio web</td><td><a href="/">peptides506.com</a></td></tr>
+    <tr><td>Cobertura</td><td>Todo Costa Rica</td></tr>
+    <tr><td>Idiomas</td><td>Español e inglés</td></tr>
+  </tbody></table>
+  <h2>¿En qué te podemos ayudar?</h2>
+  <ul class="studied">
+    <li>Hacer o confirmar un pedido.</li>
+    <li>Consultar disponibilidad y precios.</li>
+    <li>Solicitar el Certificado de Análisis (COA) de un lote.</li>
+    <li>Conocer el costo y el tiempo de envío a tu zona.</li>
+  </ul>
+  <div class="prose"><p>No ofrecemos asesoría médica ni recomendaciones de uso o dosificación. Nuestros productos son exclusivamente para fines de investigación.</p></div>
+  <h2>In English</h2>
+  <p class="en" lang="en">Reach us on WhatsApp ({esc(wa_pretty)}){f" or by email at {esc(email)}" if email else ""}. We answer in Spanish or English and deliver anywhere in Costa Rica.</p>
+  <div class="btns">{wa_btn}{mail_btn}</div>''', [org_ld]),
+]
+for slug, title, crumb, desc, main, ld in INFO:
+    url = f'{SITE}/{slug}/'
+    d = os.path.join(OUT, slug); os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, 'index.html'), 'w', encoding='utf-8').write(
+        shell(title, desc, url, f'{SITE}/product-images/hero-banner.jpg', f'<a href="/">Inicio</a> › {esc(crumb)}', main,
+              ld + [crumbs_ld([('Inicio', SITE + '/'), (crumb, url)])]))
+    hub_urls.append((url, '0.5'))
+
 for cname, k in CATEGORIES.items():
     vs = [o for o in items if o.get('category') == cname]
     if not vs: continue
@@ -534,7 +623,7 @@ def home_block():
 <li><strong>Agua bacteriostática gratis:</strong> un vial incluido por cada vial de péptido.</li>
 <li><strong>Certificado de Análisis (COA):</strong> disponible bajo solicitud para cada lote.</li>
 </ul>
-<p><a href="/productos/">Ver todos los productos</a> · {wa_txt}{f' · <a href="mailto:{esc(email)}">{esc(email)}</a>' if email else ''}</p>
+<p><a href="/productos/">Ver todos los productos</a> · <a href="/sobre-nosotros/">Sobre nosotros</a> · <a href="/envios/">Envíos y pagos</a> · <a href="/contacto/">Contacto</a> · {wa_txt}{f' · <a href="mailto:{esc(email)}">{esc(email)}</a>' if email else ''}</p>
 {sec}
 <h2>Cómo hacer un pedido</h2>
 <p>1) Elige tus productos y agrégalos al carrito. 2) Completa tus datos de contacto y envío. 3) Confirma el pedido por WhatsApp; te escribimos para coordinar el pago y la entrega.</p>
