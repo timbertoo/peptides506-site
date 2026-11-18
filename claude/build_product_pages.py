@@ -480,6 +480,50 @@ sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps
 open(os.path.join(OUT, 'sitemap.xml'), 'w', encoding='utf-8').write(sm)
 open(os.path.join(OUT, 'robots.txt'), 'w', encoding='utf-8').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n')
 
+# ---------- home page: plain-HTML content inside #app-root ----------
+# Shown to anything that reads the raw page (Google, ad tools, link previews,
+# visitors without JavaScript). The app replaces #app-root with the live
+# catalog as soon as its script runs, so regular visitors see the same
+# catalog as before. Rebuilt between the two markers on every run.
+def home_block():
+    cats = [(n, k) for n, k in CATEGORIES.items() if any(o.get('category') == n for o in items)]
+    sec = ''
+    for n, k in cats:
+        lis = ''
+        for cname, c in COMPOUNDS.items():
+            vs = [o for o in items if o['name'] == cname and o.get('category') == n]
+            if not vs: continue
+            pr = [price_of(o) for o in vs if price_of(o)]
+            lis += (f'<li><a href="/{c["slug"]}/">{esc(cname)}</a> <span>{esc(", ".join(o["variant"] for o in sorted(vs, key=strength_key)))}'
+                    f'{f" · desde ${min(pr):,.0f}" if pr else ""}</span></li>')
+        sec += f'<section><h2><a href="/{k["slug"]}/">{esc(k["h1"])}</a></h2><p>{esc(k["body"][0])}</p><ul>{lis}</ul></section>'
+    faq = ''.join(f'<h3>{esc(q)}</h3><p>{esc(a)}</p>' for q, a in FAQ)
+    wa_txt = f'<a href="https://wa.me/{wa}">WhatsApp +{wa}</a>' if wa else 'WhatsApp'
+    email = settings.get('orderEmail') or ''
+    return f"""<!--seo-home-start-->
+<style>.p5h{{font-family:Montserrat,system-ui,sans-serif;max-width:960px;margin:0 auto;padding:20px;color:#0F172A;line-height:1.55;zoom:1.25}}.p5h a{{color:#002766}}.p5h h1{{font-size:30px;line-height:1.2}}.p5h h2{{font-size:21px;margin:28px 0 6px}}.p5h h3{{font-size:16px;margin:14px 0 2px}}.p5h ul{{padding-left:20px}}.p5h li span{{color:#64748B}}.p5h .note{{background:#FEF3C7;color:#92400E;border-radius:10px;padding:12px 14px;font-size:14px}}.p5h h1,.p5h h2,.p5h h3{{font-family:inherit}}</style>
+<div class="p5h">
+<p><a href="/"><img src="/product-images/logo.png" alt="Peptides 506" width="160" height="52"></a></p>
+<h1>Peptides 506: péptidos de investigación en Costa Rica</h1>
+<p>Catálogo de péptidos de investigación con venta por vial individual y envío dentro de Costa Rica. Haz tu pedido en la tienda o directamente por WhatsApp; coordinamos el pago y la entrega contigo.</p>
+<ul>
+<li><strong>Venta por vial:</strong> no necesitas comprar kits completos.</li>
+<li><strong>Agua bacteriostática gratis:</strong> un vial incluido por cada vial de péptido.</li>
+<li><strong>Certificado de Análisis (COA):</strong> disponible bajo solicitud para cada lote.</li>
+</ul>
+<p><a href="/productos/">Ver todos los productos</a> · {wa_txt}{f' · <a href="mailto:{esc(email)}">{esc(email)}</a>' if email else ''}</p>
+{sec}
+<h2>Cómo hacer un pedido</h2>
+<p>1) Elige tus productos y agrégalos al carrito. 2) Completa tus datos de contacto y envío. 3) Confirma el pedido por WhatsApp; te escribimos para coordinar el pago y la entrega.</p>
+<h2>Preguntas frecuentes</h2>
+{faq}
+<h2>In English</h2>
+<p lang="en">Peptides 506 is a research-peptide catalog in Costa Rica: sold per single vial, a free bacteriostatic water vial with every peptide, COA on request, ordering by WhatsApp. Categories: weight loss and metabolic, recovery and repair, growth hormone, longevity and cellular health. For research use only.</p>
+<p class="note">Productos exclusivamente para fines de investigación en laboratorio. No destinados al consumo humano ni animal. Venta solo a mayores de 18 años.</p>
+</div>
+<script>/* JS is on: the live catalog takes over in a moment, so skip the text-only flash. */document.currentScript.previousElementSibling.style.display='none';</script>
+<!--seo-home-end-->"""
+
 # ---------- patch index.html: slugs in snapshot + home <head> ----------
 cat = cat[:a] + ser(data) + cat[b:]
 h = h[:s] + json.dumps(cat).replace('</script', '<\\/script') + h[e:]
@@ -495,6 +539,13 @@ if '<title>Peptides 506</title>' in h[:2000]:
         '\n<meta property="og:description" content="Péptidos de investigación, listos para pedir por WhatsApp. Venta por vial individual.">'
         f'\n<meta property="og:url" content="{SITE}/">\n<meta property="og:image" content="{SITE}/product-images/hero-banner.jpg">')
     h = h.replace('<title>Peptides 506</title>', home_meta, 1)
+hb = home_block()
+if '<!--seo-home-start-->' in h:
+    x = h.index('<!--seo-home-start-->'); y = h.index('<!--seo-home-end-->') + len('<!--seo-home-end-->')
+    h = h[:x] + hb + h[y:]
+else:
+    assert h.count('<div id="app-root"></div>') == 1
+    h = h.replace('<div id="app-root"></div>', '<div id="app-root">' + hb + '</div>', 1)
 open(INDEX, 'w', encoding='utf-8', newline='').write(h)
 print('pages:', len(items))
 for it in items: print(' ', f'/productos/{it["slug"]}/')
