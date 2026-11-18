@@ -10,9 +10,14 @@ it), improves the home page <head> (lang, title, description, canonical, OG).
 Items that already have a `slug` keep it, so renaming a product does not
 change its URL. Only new items get a slug generated from name + variant.
 
+Also writes one page per compound (/<compound>-costa-rica/, all strengths)
+and per category (/peptidos-.../), with copy from seo_content.py.
+
 Usage: python3 build_product_pages.py <deploy_dir>   (edits in place)
 """
 import json, re, sys, os, html, datetime
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from seo_content import COMPOUNDS, CATEGORIES, FAQ
 
 SITE = 'https://peptides506.com'
 OUT = sys.argv[1]
@@ -124,8 +129,37 @@ h2{font-size:20px;margin:36px 0 12px}
 .others a{display:block;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-decoration:none;font-weight:600;font-size:14px}
 .others span{display:block;font-weight:500;color:var(--ink-soft);font-size:13px}
 .disclaimer{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:12px 14px;font-size:13px;margin:32px 0}
+.lead{font-size:18px;color:var(--ink);margin:6px 0 14px;font-weight:500}
+.prose p{font-size:16px;color:var(--ink-soft);margin:0 0 14px}
+.studied{padding-left:20px;margin:0}.studied li{margin:4px 0}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;padding:0;margin:0;list-style:none}
+.cards a{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;text-decoration:none;color:var(--ink)}
+.cards img{width:64px;height:64px;object-fit:contain;flex:none}
+.cards b{display:block;font-size:15px}.cards span{display:block;font-size:13px;color:var(--ink-soft)}
+.cards .p{color:var(--accent);font-weight:700}
+details{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin:8px 0}
+summary{font-weight:700;cursor:pointer}
+details p{margin:8px 0 0;color:var(--ink-soft)}
+.catnav{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0;padding:0;list-style:none}
+.catnav a{display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;text-decoration:none}
 footer{border-top:1px solid var(--border);margin-top:40px;padding:22px 0 40px;font-size:13px;color:var(--ink-soft)}
 """
+
+def comp_of(it):
+    return COMPOUNDS.get(it['name'])
+
+def cat_of(it):
+    return CATEGORIES.get(it.get('category') or '')
+
+def crumb_mid(it):
+    c, k = comp_of(it), cat_of(it)
+    out = f'<a href="/{k["slug"]}/">{esc(k["h1"])}</a> › ' if k else '<a href="/productos/">Productos</a> › '
+    if c: out += f'<a href="/{c["slug"]}/">{esc(it["name"])}</a> › '
+    return out
+
+def more_link(it):
+    c = comp_of(it)
+    return f'<p><a href="/{c["slug"]}/"><strong>Más sobre {esc(it["name"])}: qué es, investigación y todas las presentaciones →</strong></a></p>' if c else ''
 
 def page(it):
     sl = it['slug']
@@ -202,7 +236,7 @@ def page(it):
   <a class="top-link" href="/">Ver catálogo →</a>
 </div></header>
 <main class="wrap">
-  <nav class="crumbs" aria-label="Ruta"><a href="/">Inicio</a> › <a href="/productos/">Productos</a> › {esc(full)}</nav>
+  <nav class="crumbs" aria-label="Ruta"><a href="/">Inicio</a> › {crumb_mid(it)}{esc(full)}</nav>
   <div class="grid">
     <div class="img-box">{f'<img src="{esc(img_rel)}" alt="{esc(full)} - vial" width="340" height="340">' if img_rel else ''}</div>
     <div>
@@ -212,6 +246,7 @@ def page(it):
       <span class="chip {'in' if avail else 'out'}">{'Disponible' if avail else 'Agotado'}</span>
       {'' if is_water else '<div class="gift">🎁 Incluye 1 vial de Agua Bacteriostática gratis por cada vial de péptido.</div>'}
       <p class="desc">{esc(d_es)}</p>
+      {more_link(it)}
       <div class="btns">
         <a class="btn btn-buy" href="{esc(store_link)}">Comprar en la tienda</a>
         {f'<a class="btn btn-wa" href="{esc(wa_link)}" target="_blank" rel="noopener">Consultar por WhatsApp</a>' if wa_link else ''}
@@ -262,6 +297,11 @@ def index_page():
   <nav class="crumbs"><a href="/">Inicio</a> › Productos</nav>
   <h1>Péptidos de investigación</h1>
   <p class="desc">Todos nuestros productos se venden por vial individual. Haz tu pedido en la tienda o por WhatsApp.</p>
+  <h2>Categorías</h2>
+  <ul class="catnav">{''.join(f'<li><a href="/{k["slug"]}/">{esc(k["h1"])}</a></li>' for n, k in CATEGORIES.items() if any(o.get('category') == n for o in items))}</ul>
+  <h2>Compuestos</h2>
+  <ul class="catnav">{''.join(f'<li><a href="/{c["slug"]}/">{esc(n)}</a></li>' for n, c in sorted(COMPOUNDS.items(), key=lambda x: x[0].lower()) if any(o['name'] == n for o in items))}</ul>
+  <h2>Todas las presentaciones</h2>
   <ul class="others">{lis}</ul>
   <div class="disclaimer">Productos exclusivamente para fines de investigación. No destinados al consumo humano ni animal.</div>
 </main>
@@ -278,7 +318,158 @@ for it in items:
     open(os.path.join(d, 'index.html'), 'w', encoding='utf-8').write(page(it))
 open(os.path.join(pdir, 'index.html'), 'w', encoding='utf-8').write(index_page())
 
-urls = [(SITE + '/', '1.0'), (SITE + '/productos/', '0.8')] + [(f'{SITE}/productos/{it["slug"]}/', '0.7') for it in items]
+def price_of(o):
+    p = o.get('price')
+    return p if isinstance(p, (int, float)) and p > 0 else None
+
+def card(o, label=None):
+    img = '/' + o['image'].lstrip('/') if o.get('image') else '/product-images/logo.png'
+    p = price_of(o)
+    return (f'<li><a href="/productos/{esc(o["slug"])}/"><img src="{esc(img)}" alt="{esc(o["name"])} {esc(o["variant"])}" loading="lazy" width="64" height="64">'
+            f'<div><b>{esc(label or o["name"])}</b><span>{esc(o["variant"])}</span>'
+            f'{f"<span class=p>${p:,.2f}</span>" if p else ""}</div></a></li>')
+
+def shell(title, desc, url, img, crumbs, main, ld_list):
+    ldj = lambda o: json.dumps(o, ensure_ascii=False).replace('</', '<\\/')
+    return f'''<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(title)}</title>
+<meta name="description" content="{esc(desc)}">
+<link rel="canonical" href="{esc(url)}">
+<meta name="robots" content="index,follow">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Peptides 506">
+<meta property="og:locale" content="es_CR">
+<meta property="og:title" content="{esc(title)}">
+<meta property="og:description" content="{esc(desc)}">
+<meta property="og:url" content="{esc(url)}">
+<meta property="og:image" content="{esc(img)}">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/product-images/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+{''.join(f'<script type="application/ld+json">{ldj(o)}</script>' for o in ld_list)}
+<style>{CSS}</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a href="/" aria-label="Peptides 506 - inicio"><img class="logo" src="/product-images/logo.png" alt="Peptides 506" width="160" height="52"></a>
+  <a class="top-link" href="/">Ver catálogo →</a>
+</div></header>
+<main class="wrap">
+  <nav class="crumbs" aria-label="Ruta">{crumbs}</nav>
+{main}
+  <div class="disclaimer">Productos exclusivamente para fines de investigación en laboratorio. No destinados al consumo humano ni animal. Venta solo a mayores de 18 años.</div>
+</main>
+<footer><div class="wrap">© Peptides 506 · Costa Rica · <a href="/">peptides506.com</a> · <a href="/productos/">Todos los productos</a>{f' · <a href="mailto:{esc(settings.get("orderEmail"))}">{esc(settings.get("orderEmail"))}</a>' if settings.get('orderEmail') else ''}</div></footer>
+</body>
+</html>
+'''
+
+def crumbs_ld(pairs):
+    return {'@context': 'https://schema.org', '@type': 'BreadcrumbList', 'itemListElement': [
+        {'@type': 'ListItem', 'position': n + 1, 'name': nm, 'item': u} for n, (nm, u) in enumerate(pairs)]}
+
+def strength_key(o):
+    m = re.match(r'([0-9.]+)', o.get('variant') or '')
+    return float(m.group(1)) if m else 0
+
+hub_urls = []
+from urllib.parse import quote
+for name, c in COMPOUNDS.items():
+    vs = sorted([o for o in items if o['name'] == name], key=strength_key)
+    if not vs: continue
+    url = f'{SITE}/{c["slug"]}/'
+    k = cat_of(vs[0])
+    prices = [price_of(o) for o in vs if price_of(o)]
+    frm = f'desde ${min(prices):,.2f} por vial' if prices else ''
+    img = SITE + '/' + vs[0]['image'].lstrip('/') if vs[0].get('image') else SITE + '/product-images/logo.png'
+    strengths = ', '.join(o['variant'] for o in vs)
+    desc = f'{c["lead"]} Presentaciones: {strengths}{", " + frm if frm else ""}. Envío en Costa Rica, pedidos por WhatsApp.'
+    wa_link = f'https://wa.me/{wa}?text=' + quote(f'Hola! Quiero información sobre {name}. ({url})') if wa else ''
+    pairs = [('Inicio', SITE + '/')] + ([(k['h1'], f'{SITE}/{k["slug"]}/')] if k else []) + [(name, url)]
+    ld = [{'@context': 'https://schema.org', '@type': 'Product', 'name': name, 'image': [img], 'description': c['lead'],
+           'brand': {'@type': 'Brand', 'name': 'Peptides 506'},
+           **({'offers': {'@type': 'AggregateOffer', 'priceCurrency': 'USD', 'lowPrice': f'{min(prices):.2f}', 'highPrice': f'{max(prices):.2f}', 'offerCount': len(vs)}} if prices else {})},
+          crumbs_ld(pairs),
+          {'@context': 'https://schema.org', '@type': 'FAQPage', 'mainEntity': [
+              {'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in [(f'¿Qué es {name}?', c['lead'])] + FAQ]}]
+    crumbs = '<a href="/">Inicio</a> › ' + (f'<a href="/{k["slug"]}/">{esc(k["h1"])}</a> › ' if k else '') + esc(name)
+    related = [o for o in items if k and o.get('category') == vs[0].get('category') and o['name'] != name]
+    seen, rel = set(), []
+    for o in related:
+        cc = COMPOUNDS.get(o['name'])
+        if cc and cc['slug'] not in seen:
+            seen.add(cc['slug']); rel.append((o['name'], cc['slug']))
+    main = f'''  <div class="grid">
+    <div class="img-box"><img src="{esc(img.replace(SITE, ''))}" alt="{esc(name)} - vial" width="340" height="340"></div>
+    <div>
+      {f'<p class="cat">{esc(k["h1"])}</p>' if k else ''}
+      <h1>{esc(c["h1"])}</h1>
+      <p class="lead">{esc(c["lead"])}</p>
+      {f'<div class="price">{esc(frm.replace(" por vial", ""))} <small>USD por vial</small></div>' if frm else ''}
+      {'<div class="gift">🎁 Incluye 1 vial de Agua Bacteriostática gratis por cada vial de péptido.</div>'}
+      <div class="btns">
+        <a class="btn btn-buy" href="#presentaciones">Ver presentaciones</a>
+        {f'<a class="btn btn-wa" href="{esc(wa_link)}" target="_blank" rel="noopener">Consultar por WhatsApp</a>' if wa_link else ''}
+      </div>
+    </div>
+  </div>
+  <h2 id="presentaciones">Presentaciones disponibles</h2>
+  <ul class="cards">{''.join(card(o) for o in vs)}</ul>
+  <h2>¿Qué es {esc(name)}?</h2>
+  <div class="prose">{''.join(f'<p>{esc(p)}</p>' for p in c["body"])}</div>
+  <h2>Áreas de investigación</h2>
+  <ul class="studied">{''.join(f'<li>{esc(x)}</li>' for x in c["studied"])}</ul>
+  <h2>Preguntas frecuentes</h2>
+  {''.join(f'<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>' for q, a in FAQ)}
+  <h2>In English</h2>
+  <p class="en" lang="en">{esc(c["en"])}</p>
+  {f'<h2>Relacionados</h2><ul class="catnav">' + ''.join(f'<li><a href="/{sl}/">{esc(n)}</a></li>' for n, sl in rel) + '</ul>' if rel else ''}'''
+    d = os.path.join(OUT, c['slug']); os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, 'index.html'), 'w', encoding='utf-8').write(
+        shell(f'{name} en Costa Rica | {strengths} | Peptides 506', desc, url, img, crumbs, main, ld))
+    hub_urls.append((url, '0.8'))
+
+for cname, k in CATEGORIES.items():
+    vs = [o for o in items if o.get('category') == cname]
+    if not vs: continue
+    url = f'{SITE}/{k["slug"]}/'
+    names = []
+    for o in vs:
+        if o['name'] not in names: names.append(o['name'])
+    comp_cards = ''
+    for n in names:
+        group = sorted([o for o in vs if o['name'] == n], key=strength_key)
+        cc = COMPOUNDS.get(n)
+        img = '/' + group[0]['image'].lstrip('/') if group[0].get('image') else '/product-images/logo.png'
+        prices = [price_of(o) for o in group if price_of(o)]
+        href = f'/{cc["slug"]}/' if cc else f'/productos/{group[0]["slug"]}/'
+        comp_cards += (f'<li><a href="{href}"><img src="{esc(img)}" alt="{esc(n)}" loading="lazy" width="64" height="64">'
+                       f'<div><b>{esc(n)}</b><span>{esc(", ".join(o["variant"] for o in group))}</span>'
+                       f'{f"<span class=p>desde ${min(prices):,.2f}</span>" if prices else ""}</div></a></li>')
+    others = ''.join(f'<li><a href="/{kk["slug"]}/">{esc(kk["h1"])}</a></li>' for nn, kk in CATEGORIES.items() if nn != cname and any(o.get('category') == nn for o in items))
+    main = f'''  <h1>{esc(k["h1"])}</h1>
+  <div class="prose">{''.join(f'<p>{esc(p)}</p>' for p in k["body"])}</div>
+  <ul class="cards">{comp_cards}</ul>
+  <p class="en" lang="en" style="margin-top:24px">{esc(k["en"])}</p>
+  <h2>Otras categorías</h2>
+  <ul class="catnav">{others}</ul>'''
+    desc = f'{k["body"][0][:220].rsplit(" ", 1)[0]}… Venta por vial, envío en Costa Rica.'
+    ld = [crumbs_ld([('Inicio', SITE + '/'), (k['h1'], url)]),
+          {'@context': 'https://schema.org', '@type': 'ItemList', 'itemListElement': [
+              {'@type': 'ListItem', 'position': n + 1, 'name': nm, 'url': f'{SITE}/{COMPOUNDS[nm]["slug"]}/'} for n, nm in enumerate([x for x in names if x in COMPOUNDS])]}]
+    d = os.path.join(OUT, k['slug']); os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, 'index.html'), 'w', encoding='utf-8').write(
+        shell(f'{k["title"]} | Peptides 506', desc, url, f'{SITE}/product-images/hero-banner.jpg',
+              f'<a href="/">Inicio</a> › {esc(k["h1"])}', main, ld))
+    hub_urls.append((url, '0.8'))
+
+urls = [(SITE + '/', '1.0'), (SITE + '/productos/', '0.8')] + hub_urls + [(f'{SITE}/productos/{it["slug"]}/', '0.7') for it in items]
 sm = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + ''.join(
     f'  <url><loc>{u}</loc><lastmod>{today}</lastmod><priority>{p}</priority></url>\n' for u, p in urls) + '</urlset>\n'
 open(os.path.join(OUT, 'sitemap.xml'), 'w', encoding='utf-8').write(sm)
