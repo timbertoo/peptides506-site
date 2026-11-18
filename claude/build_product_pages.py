@@ -17,7 +17,7 @@ Usage: python3 build_product_pages.py <deploy_dir>   (edits in place)
 """
 import json, re, sys, os, html, datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from seo_content import COMPOUNDS, CATEGORIES, FAQ
+from seo_content import COMPOUNDS, CATEGORIES, FAQ, EXTRA, HANDLING, MORE
 
 SITE = 'https://peptides506.com'
 OUT = sys.argv[1]
@@ -383,12 +383,27 @@ def strength_key(o):
     m = re.match(r'([0-9.]+)', o.get('variant') or '')
     return float(m.group(1)) if m else 0
 
+def compare_table(name, cat):
+    rows = []
+    for n, cc in COMPOUNDS.items():
+        g = sorted([o for o in items if o['name'] == n and o.get('category') == cat], key=strength_key)
+        if not g: continue
+        mech = dict(EXTRA.get(n, {}).get('specs', [])).get('Mecanismo') or dict(EXTRA.get(n, {}).get('specs', [])).get('Tipo') or ''
+        pr = [price_of(o) for o in g if price_of(o)]
+        nm = esc(n) if n == name else f'<a href="/{cc["slug"]}/">{esc(n)}</a>'
+        rows.append(f'<tr><td>{nm}</td><td>{esc(mech)}<br><span style="color:var(--ink-faint)">{esc(", ".join(o["variant"] for o in g))}{f" · desde ${min(pr):,.0f}" if pr else ""}</span></td></tr>')
+    if len(rows) < 2: return ''
+    k = CATEGORIES.get(cat)
+    return f'<h2>Comparación: {esc(k["h1"].lower() if k else "compuestos relacionados")}</h2><table><tbody>' + ''.join(rows) + '</tbody></table>'
+
 hub_urls = []
 from urllib.parse import quote
 for name, c in COMPOUNDS.items():
     vs = sorted([o for o in items if o['name'] == name], key=strength_key)
     if not vs: continue
     url = f'{SITE}/{c["slug"]}/'
+    x = dict(EXTRA.get(name, {}), **MORE.get(name, {}))
+    faqs = [(f'¿Qué es {name}?', c['lead'])] + x.get('faq', []) + FAQ
     k = cat_of(vs[0])
     prices = [price_of(o) for o in vs if price_of(o)]
     frm = f'desde ${min(prices):,.2f} por vial' if prices else ''
@@ -402,7 +417,7 @@ for name, c in COMPOUNDS.items():
            **({'offers': {'@type': 'AggregateOffer', 'priceCurrency': 'USD', 'lowPrice': f'{min(prices):.2f}', 'highPrice': f'{max(prices):.2f}', 'offerCount': len(vs)}} if prices else {})},
           crumbs_ld(pairs),
           {'@context': 'https://schema.org', '@type': 'FAQPage', 'mainEntity': [
-              {'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in [(f'¿Qué es {name}?', c['lead'])] + FAQ]}]
+              {'@type': 'Question', 'name': q, 'acceptedAnswer': {'@type': 'Answer', 'text': a}} for q, a in faqs]}]
     crumbs = '<a href="/">Inicio</a> › ' + (f'<a href="/{k["slug"]}/">{esc(k["h1"])}</a> › ' if k else '') + esc(name)
     related = [o for o in items if k and o.get('category') == vs[0].get('category') and o['name'] != name]
     seen, rel = set(), []
@@ -428,10 +443,18 @@ for name, c in COMPOUNDS.items():
   <ul class="cards">{''.join(card(o) for o in vs)}</ul>
   <h2>¿Qué es {esc(name)}?</h2>
   <div class="prose">{''.join(f'<p>{esc(p)}</p>' for p in c["body"])}</div>
+  {f'<h2>Ficha técnica</h2><table><tbody>' + ''.join(f'<tr><td>{esc(a)}</td><td>{esc(b)}</td></tr>' for a, b in x["specs"]) + '</tbody></table>' if x.get('specs') else ''}
+  {f'<h2>Cómo funciona</h2><div class="prose"><p>{esc(x["how"])}</p></div>' if x.get('how') else ''}
+  {f'<h2>Contexto</h2><div class="prose"><p>{esc(x["history"])}</p></div>' if x.get('history') else ''}
   <h2>Áreas de investigación</h2>
-  <ul class="studied">{''.join(f'<li>{esc(x)}</li>' for x in c["studied"])}</ul>
+  <ul class="studied">{''.join(f'<li>{esc(i)}</li>' for i in c["studied"])}</ul>
+  {f'<h2>Tipos de estudios</h2><ul class="studied">' + ''.join(f'<li><strong>{esc(a)}:</strong> {esc(b)}</li>' for a, b in x["research"]) + '</ul>' if x.get('research') else ''}
+  {compare_table(name, vs[0].get('category'))}
+  {f'<h2>Límites de la evidencia</h2><div class="prose"><p>{esc(x["limits"])}</p></div>' if x.get('limits') else ''}
+  <h2>Presentación y manejo</h2>
+  <ul class="studied">{''.join(f'<li>{esc(i)}</li>' for i in HANDLING)}</ul>
   <h2>Preguntas frecuentes</h2>
-  {''.join(f'<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>' for q, a in FAQ)}
+  {''.join(f'<details><summary>{esc(q)}</summary><p>{esc(a)}</p></details>' for q, a in faqs[1:])}
   <h2>In English</h2>
   <p class="en" lang="en">{esc(c["en"])}</p>
   {f'<h2>Relacionados</h2><ul class="catnav">' + ''.join(f'<li><a href="/{sl}/">{esc(n)}</a></li>' for n, sl in rel) + '</ul>' if rel else ''}'''
