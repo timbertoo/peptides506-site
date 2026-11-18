@@ -49,6 +49,7 @@ DESC_ES = {
     'TB-500': 'Fragmento sintético de la Timosina Beta-4, estudiado en la reparación de tejidos, la flexibilidad y la reducción de la inflamación.',
     'Tesamorelin': 'Análogo de GHRH estudiado en la reducción de grasa visceral, además de sus efectos cognitivos y metabólicos.',
     'Tirzepatide': 'Péptido agonista dual de los receptores GLP-1/GIP, estudiado en el control de la glucosa y la pérdida de peso.',
+    'CJC-1295 without DAC + IPA': 'Mezcla de CJC-1295 sin DAC e ipamorelin en un solo vial (5 mg + 5 mg), que combina un análogo de GHRH con un secretagogo de hormona de crecimiento.',
     '5-AMINO-1MQ': 'Molécula pequeña que inhibe la enzima NNMT, estudiada en el metabolismo de las grasas y el control del peso.',
 }
 
@@ -318,7 +319,11 @@ for it in items:
     open(os.path.join(d, 'index.html'), 'w', encoding='utf-8').write(page(it))
 open(os.path.join(pdir, 'index.html'), 'w', encoding='utf-8').write(index_page())
 
+def is_avail(o):
+    return bool(o.get('available')) and (o.get('stockQty') is None or o.get('stockQty') > 0)
+
 def price_of(o):
+    if not is_avail(o): return None
     p = o.get('price')
     return p if isinstance(p, (int, float)) and p > 0 else None
 
@@ -327,7 +332,7 @@ def card(o, label=None):
     p = price_of(o)
     return (f'<li><a href="/productos/{esc(o["slug"])}/"><img src="{esc(img)}" alt="{esc(o["name"])} {esc(o["variant"])}" loading="lazy" width="64" height="64">'
             f'<div><b>{esc(label or o["name"])}</b><span>{esc(o["variant"])}</span>'
-            f'{f"<span class=p>${p:,.2f}</span>" if p else ""}</div></a></li>')
+            f'{f"<span class=p>${p:,.2f}</span>" if p else "<span>Agotado</span>"}</div></a></li>')
 
 def shell(title, desc, url, img, crumbs, main, ld_list):
     ldj = lambda o: json.dumps(o, ensure_ascii=False).replace('</', '<\\/')

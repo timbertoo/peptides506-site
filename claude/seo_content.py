@@ -139,6 +139,17 @@ COMPOUNDS = {
         'studied': ['Pulsos de hormona de crecimiento', 'IGF-1', 'Combinación con ipamorelin'],
         'en': 'CJC-1295 without DAC (Mod GRF 1-29) is a short-acting GHRH analogue that produces natural-style GH pulses, often studied with ipamorelin. For research use only.',
     },
+    'CJC-1295 without DAC + IPA': {
+        'slug': 'cjc-1295-ipamorelin-costa-rica',
+        'h1': 'CJC-1295 sin DAC + Ipamorelin en Costa Rica',
+        'lead': 'Los dos péptidos de hormona de crecimiento que más se estudian juntos, en un solo vial (5 mg + 5 mg).',
+        'body': [
+            'Esta mezcla une un análogo de GHRH (CJC-1295 sin DAC) con un agonista del receptor de grelina (ipamorelin). Cada uno estimula la liberación de hormona de crecimiento por una vía distinta.',
+            'Por eso es la combinación más habitual en la investigación de secretagogos. Tenerla en un solo vial simplifica la preparación. Consulta las páginas de cada compuesto para más detalle.',
+        ],
+        'studied': ['Pulsos de hormona de crecimiento', 'IGF-1', 'Composición corporal', 'Recuperación'],
+        'en': 'A single-vial blend of CJC-1295 without DAC and ipamorelin (5 mg + 5 mg), the most commonly studied GHRH + ghrelin-agonist pairing. For research use only.',
+    },
     'Tesamorelin': {
         'slug': 'tesamorelin-costa-rica',
         'h1': 'Tesamorelin en Costa Rica',
